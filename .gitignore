@@ -1,0 +1,22 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Android Studio
+.idea/
+*.iml
+local.properties
+
+# Generated files
+app/build/
+
+# Keystore
+*.jks
+*.keystore
+
+# Log files
+*.log
+
+# macOS
+.DS_Store
