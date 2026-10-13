@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +56,10 @@ import android.app.PendingIntent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 
 class MainActivity : ComponentActivity() {
 
@@ -175,8 +180,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val recheckSignal = remember { mutableStateOf(System.currentTimeMillis()) }
-            MainScreen(recheckSignal = recheckSignal)
+            MainScreen()
         }
     }
 
@@ -340,77 +344,113 @@ val AccentRed = Color(0xFFEF4444)
 val TextLight = Color(0xFFF8FAFC)
 val TextMuted = Color(0xFF94A3B8)
 
+// Each background IMS query starts a fresh app_process VM on the device, so it runs rarely
+// and only while the app is visible.
+const val IMS_POLL_INTERVAL_MS = 10_000L
+// How often the status files (written by BrokerInstrumentation and the poller) are re-read for the UI
+const val STATUS_REFRESH_INTERVAL_MS = 2_000L
+
+data class SlotStatus(val imsRegistered: Boolean = false, val configApplied: Boolean = false)
+
+private fun readFlagFile(context: Context, name: String): Boolean? = try {
+    val file = java.io.File(context.filesDir, name)
+    if (file.exists()) file.readText().trim().toBoolean() else null
+} catch (e: Exception) {
+    null
+}
+
+// Blocking disk reads — call off the main thread.
+fun readSlotStatuses(context: Context): List<SlotStatus> {
+    val prefs = context.getSharedPreferences("volte_settings", Context.MODE_PRIVATE)
+    return (0..1).map { slot ->
+        SlotStatus(
+            imsRegistered = readFlagFile(context, "ims_status_$slot.txt")
+                ?: prefs.getBoolean("ims_registered_slot_$slot", false),
+            configApplied = readFlagFile(context, "config_applied_$slot.txt") ?: false
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(System.currentTimeMillis()) }) {
+fun MainScreen() {
     var selectedSimSlot by remember { mutableStateOf(0) }
     var portInput by remember { mutableStateOf("") }
     var isApplying by remember { mutableStateOf(false) }
     // True while am instrument is running — pauses background ImsQueryTool polling
     val isInstrumenting = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+    var slotStatuses by remember { mutableStateOf(listOf(SlotStatus(), SlotStatus())) }
+    // Bumped after a successful pairing so that the authorization check runs again
+    var authCheckSignal by remember { mutableStateOf(0L) }
 
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     
     LaunchedEffect(Unit) {
         MainActivity.onAuthStatusChanged = {
-            recheckSignal.value = System.currentTimeMillis()
+            authCheckSignal = System.currentTimeMillis()
         }
         MainActivity.onInstrumentDone = { isActivate, _ ->
             (context as? MainActivity)?.showImsStatusNotification(isActivate)
-            recheckSignal.value = System.currentTimeMillis()
-        }
-        while (true) {
-            delay(1000)
-            recheckSignal.value = System.currentTimeMillis()
         }
     }
 
-    LaunchedEffect(portInput) {
+    // Read the status files on the IO dispatcher and only replace the state when something changed,
+    // so the screen does not recompose on every tick.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                val fresh = withContext(Dispatchers.IO) { readSlotStatuses(context) }
+                if (fresh != slotStatuses) slotStatuses = fresh
+                delay(STATUS_REFRESH_INTERVAL_MS)
+            }
+        }
+    }
+
+    LaunchedEffect(portInput, lifecycleOwner) {
         val port = portInput.toIntOrNull()
         if (port != null && port > 0 && port <= 65535) {
-            withContext(Dispatchers.IO) {
-                var activeKadb: com.flyfishxu.kadb.Kadb? = null
-                try {
-                    while (true) {
-                        // Pause while BrokerInstrumentation is running to avoid file conflicts
-                        if (isInstrumenting.get()) {
-                            delay(1000)
-                            continue
-                        }
-                        try {
-                            val kadb = activeKadb ?: com.flyfishxu.kadb.Kadb.create("127.0.0.1", port, 5000, 5000).also { activeKadb = it }
-                            val pathRes = kadb.shell("pm path com.svenuks.imsforpixel")
-                            if (pathRes.exitCode == 0) {
-                                val path = pathRes.output.trim().substringAfter("package:")
-                                if (path.isNotEmpty()) {
-                                    val queryCmd = "export CLASSPATH=$path; app_process /system/bin com.svenuks.imsforpixel.ImsQueryTool"
-                                    val queryRes = kadb.shell(queryCmd)
-                                    if (queryRes.exitCode == 0) {
-                                        val lines = queryRes.output.lines()
-                                        for (line in lines) {
-                                            if (line.startsWith("RESULT:")) {
-                                                val parts = line.split(":")
-                                                if (parts.size == 3) {
-                                                    val slot = parts[1].toIntOrNull() ?: continue
-                                                    val isImsRegistered = parts[2].trim().toBoolean()
-                                                    val statusFile = java.io.File(context.filesDir, "ims_status_$slot.txt")
-                                                    statusFile.writeText(isImsRegistered.toString())
-                                                    Log.d("LocalAdb", "Updated slot $slot IMS status: $isImsRegistered")
-                                                }
+            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                withContext(Dispatchers.IO) {
+                    // Our own APK path is known locally, no need to run `pm path` over ADB on every poll
+                    val apkPath = context.applicationInfo.sourceDir
+                    val queryCmd = "export CLASSPATH=$apkPath; app_process /system/bin com.svenuks.imsforpixel.ImsQueryTool"
+                    var activeKadb: com.flyfishxu.kadb.Kadb? = null
+                    try {
+                        while (true) {
+                            // Pause while BrokerInstrumentation is running to avoid file conflicts
+                            if (isInstrumenting.get()) {
+                                delay(1000)
+                                continue
+                            }
+                            try {
+                                val kadb = activeKadb ?: com.flyfishxu.kadb.Kadb.create("127.0.0.1", port, 5000, 5000).also { activeKadb = it }
+                                val queryRes = kadb.shell(queryCmd)
+                                if (queryRes.exitCode == 0) {
+                                    val lines = queryRes.output.lines()
+                                    for (line in lines) {
+                                        if (line.startsWith("RESULT:")) {
+                                            val parts = line.split(":")
+                                            if (parts.size == 3) {
+                                                val slot = parts[1].toIntOrNull() ?: continue
+                                                val isImsRegistered = parts[2].trim().toBoolean()
+                                                val statusFile = java.io.File(context.filesDir, "ims_status_$slot.txt")
+                                                statusFile.writeText(isImsRegistered.toString())
+                                                Log.d("LocalAdb", "Updated slot $slot IMS status: $isImsRegistered")
                                             }
                                         }
                                     }
                                 }
+                            } catch (e: Exception) {
+                                Log.d("LocalAdb", "Error in background IMS check: ${e.message}")
+                                try { activeKadb?.close() } catch (ignored: Exception) {}
+                                activeKadb = null
                             }
-                        } catch (e: Exception) {
-                            Log.d("LocalAdb", "Error in background IMS check: ${e.message}")
-                            try { activeKadb?.close() } catch (ignored: Exception) {}
-                            activeKadb = null
+                            delay(IMS_POLL_INTERVAL_MS)
                         }
-                        delay(3000)
+                    } finally {
+                        try { activeKadb?.close() } catch (ignored: Exception) {}
                     }
-                } finally {
-                    try { activeKadb?.close() } catch (ignored: Exception) {}
                 }
             }
         }
@@ -425,19 +465,21 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
             return
         }
 
-        // Reset clear flags to false to ensure the configuration overrides are applied
-        val prefs = context.getSharedPreferences("volte_settings", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean("clear_slot_0", false)
-            .putBoolean("clear_slot_1", false)
-            .commit()
-
         isApplying = true
         isInstrumenting.set(true)
         scope.launch {
             // Run am instrument synchronously (no nohup/&) so we wait for the real result.
             // BrokerInstrumentation polls IMS for up to 30s internally; timeout set to 90s.
             val result = withContext(Dispatchers.IO) {
+                // Reset clear flags to false to ensure the configuration overrides are applied.
+                // commit() (not apply()) so the flags are on disk before the instrumentation reads them;
+                // it runs here on the IO dispatcher to keep the disk write off the main thread.
+                val prefs = context.getSharedPreferences("volte_settings", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putBoolean("clear_slot_0", false)
+                    .putBoolean("clear_slot_1", false)
+                    .commit()
+
                 try {
                     Kadb.create("127.0.0.1", port, 90000, 90000).use { kadb ->
                         val cmd = "nohup am instrument -w -e clear false com.svenuks.imsforpixel/com.svenuks.imsforpixel.BrokerInstrumentation > /dev/null 2>&1 &"
@@ -476,31 +518,31 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
         isApplying = true
         isInstrumenting.set(true)
         scope.launch {
-            
-            // Reset prefs for both slots
-            val prefs = context.getSharedPreferences("volte_settings", Context.MODE_PRIVATE)
-            prefs.edit()
-                .putBoolean("clear_slot_0", true)
-                .putBoolean("clear_slot_1", true)
-                .putBoolean("volte_slot_0", true)
-                .putBoolean("volte_slot_1", true)
-                .putBoolean("vonr_slot_0", true)
-                .putBoolean("vonr_slot_1", true)
-                .putBoolean("vowifi_slot_0", true)
-                .putBoolean("vowifi_slot_1", true)
-                .putBoolean("wfc_roaming_slot_0", true)
-                .putBoolean("wfc_roaming_slot_1", true)
-                .putBoolean("ss_ut_slot_0", true)
-                .putBoolean("ss_ut_slot_1", true)
-                .putBoolean("show_ims_slot_0", true)
-                .putBoolean("show_ims_slot_1", true)
-                .putBoolean("allow_apn_slot_0", false)
-                .putBoolean("allow_apn_slot_1", false)
-                .putBoolean("cross_sim_slot_0", false)
-                .putBoolean("cross_sim_slot_1", false)
-                .commit()
-
             val result = withContext(Dispatchers.IO) {
+                // Reset prefs for both slots (commit() on the IO dispatcher: durable before am instrument,
+                // without blocking the main thread)
+                val prefs = context.getSharedPreferences("volte_settings", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putBoolean("clear_slot_0", true)
+                    .putBoolean("clear_slot_1", true)
+                    .putBoolean("volte_slot_0", true)
+                    .putBoolean("volte_slot_1", true)
+                    .putBoolean("vonr_slot_0", true)
+                    .putBoolean("vonr_slot_1", true)
+                    .putBoolean("vowifi_slot_0", true)
+                    .putBoolean("vowifi_slot_1", true)
+                    .putBoolean("wfc_roaming_slot_0", true)
+                    .putBoolean("wfc_roaming_slot_1", true)
+                    .putBoolean("ss_ut_slot_0", true)
+                    .putBoolean("ss_ut_slot_1", true)
+                    .putBoolean("show_ims_slot_0", true)
+                    .putBoolean("show_ims_slot_1", true)
+                    .putBoolean("allow_apn_slot_0", false)
+                    .putBoolean("allow_apn_slot_1", false)
+                    .putBoolean("cross_sim_slot_0", false)
+                    .putBoolean("cross_sim_slot_1", false)
+                    .commit()
+
                 try {
                     Kadb.create("127.0.0.1", port, 90000, 90000).use { kadb ->
                         val cmd = "nohup am instrument -w -e clear true com.svenuks.imsforpixel/com.svenuks.imsforpixel.BrokerInstrumentation > /dev/null 2>&1 &"
@@ -585,7 +627,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
                 item {
                     ConfigPanel(
                         slotIndex = selectedSimSlot,
-                        recheckSignal = recheckSignal,
+                        status = slotStatuses[selectedSimSlot],
                         onConfigChanged = {}
                     )
                 }
@@ -593,7 +635,8 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
                 // Local Apply Card (Wireless Debugging self-connect)
                 item {
                     LocalAdbCard(
-                        recheckSignal = recheckSignal,
+                        slotStatuses = slotStatuses,
+                        authCheckSignal = authCheckSignal,
                         portInput = portInput,
                         onPortInputChange = { portInput = it },
                         isApplying = isApplying,
@@ -642,7 +685,7 @@ fun SimSelectorTabs(
 @Composable
 fun ConfigPanel(
     slotIndex: Int,
-    recheckSignal: MutableState<Long>,
+    status: SlotStatus,
     onConfigChanged: () -> Unit
 ) {
     val context = LocalContext.current
@@ -658,34 +701,8 @@ fun ConfigPanel(
     var ssUtEnabled by remember(slotIndex) { mutableStateOf(prefs.getBoolean("ss_ut_slot_$slotIndex", true)) }
     var allowApnEdit by remember(slotIndex) { mutableStateOf(prefs.getBoolean("allow_apn_slot_$slotIndex", false)) } // Default false
     
-    // Load cached IMS registration status from status file updated by PC run
-    var imsRegistered by remember(slotIndex) { mutableStateOf(false) }
-    var configApplied by remember(slotIndex) { mutableStateOf(false) }
-    
-    val signalValue = recheckSignal.value
-    LaunchedEffect(slotIndex, signalValue) {
-        val statusFile = java.io.File(context.filesDir, "ims_status_$slotIndex.txt")
-        imsRegistered = if (statusFile.exists()) {
-            try {
-                statusFile.readText().trim().toBoolean()
-            } catch (e: Exception) {
-                prefs.getBoolean("ims_registered_slot_$slotIndex", false)
-            }
-        } else {
-            prefs.getBoolean("ims_registered_slot_$slotIndex", false)
-        }
-
-        val appliedFile = java.io.File(context.filesDir, "config_applied_$slotIndex.txt")
-        configApplied = if (appliedFile.exists()) {
-            try {
-                appliedFile.readText().trim().toBoolean()
-            } catch (e: Exception) {
-                false
-            }
-        } else {
-            false
-        }
-    }
+    val imsRegistered = status.imsRegistered
+    val configApplied = status.configApplied
 
     Card(
         modifier = Modifier
@@ -745,27 +762,27 @@ fun ConfigPanel(
             // Toggles
             ToggleRow("Звонки VoLTE", "Голосовые вызовы через сеть 4G/LTE", voLteEnabled) { 
                 voLteEnabled = it
-                prefs.edit().putBoolean("volte_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
+                prefs.edit().putBoolean("volte_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).apply()
                 onConfigChanged()
             }
             ToggleRow("Звонки 5G (VoNR)", "Голосовые вызовы в автономной сети 5G SA (VoNR)", voNrEnabled) { 
                 voNrEnabled = it
-                prefs.edit().putBoolean("vonr_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
+                prefs.edit().putBoolean("vonr_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).apply()
                 onConfigChanged()
             }
             ToggleRow("Звонки по Wi-Fi (VoWiFi)", "Звонки через Wi-Fi при слабом сигнале сотовой сети", voWifiEnabled) { 
                 voWifiEnabled = it
-                prefs.edit().putBoolean("vowifi_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
+                prefs.edit().putBoolean("vowifi_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).apply()
                 onConfigChanged()
             }
             ToggleRow("Звонки по Wi-Fi в роуминге", "Не отключать звонки по Wi-Fi за границей и в роуминге", wfcRoamingEnabled) { 
                 wfcRoamingEnabled = it
-                prefs.edit().putBoolean("wfc_roaming_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
+                prefs.edit().putBoolean("wfc_roaming_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).apply()
                 onConfigChanged()
             }
             ToggleRow("Дополнительные услуги (UT)", "Переадресация, ожидание вызова и другие услуги оператора", ssUtEnabled) { 
                 ssUtEnabled = it
-                prefs.edit().putBoolean("ss_ut_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
+                prefs.edit().putBoolean("ss_ut_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).apply()
                 onConfigChanged()
             }
         }
@@ -802,10 +819,25 @@ fun ToggleRow(
     }
 }
 
+// mDNS also reports the Wireless Debugging services of other devices on the same Wi-Fi network.
+// Only a service advertised from one of this device's own addresses is reachable via 127.0.0.1.
+// Called on the NSD callback thread.
+private fun isOwnDeviceService(info: NsdServiceInfo): Boolean {
+    @Suppress("DEPRECATION")
+    val host = info.host ?: return true
+    return try {
+        java.net.NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+            .any { iface -> iface.inetAddresses.toList().any { it == host } }
+    } catch (e: Exception) {
+        true
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalAdbCard(
-    recheckSignal: MutableState<Long>,
+    slotStatuses: List<SlotStatus>,
+    authCheckSignal: Long,
     portInput: String,
     onPortInputChange: (String) -> Unit,
     isApplying: Boolean,
@@ -817,53 +849,31 @@ fun LocalAdbCard(
     var pairingPortInput by remember { mutableStateOf("") }
     var showManualPorts by remember { mutableStateOf(false) }
     var isAuthorized by remember { mutableStateOf(false) }
-    var slot0Active by remember { mutableStateOf(false) }
-    var slot1Active by remember { mutableStateOf(false) }
-    var slot0Applied by remember { mutableStateOf(false) }
-    var slot1Applied by remember { mutableStateOf(false) }
     var isWifiConnected by remember { mutableStateOf(false) }
+    // System network/NSD callbacks arrive on binder threads; Compose state is only written on the main thread
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
-    val signalValue = recheckSignal.value
-    // Auth check: only re-run when portInput changes, NOT on every 1s signal tick.
-    // Running every second would spam new Kadb connections and compete with the
+    val slot0Active = slotStatuses[0].imsRegistered
+    val slot1Active = slotStatuses[1].imsRegistered
+    val slot0Applied = slotStatuses[0].configApplied
+    val slot1Applied = slotStatuses[1].configApplied
+
+    // Auth check: re-run when the port changes or after a successful pairing, not periodically.
+    // Running it often would spam new Kadb connections and compete with the
     // background IMS polling loop and any active BrokerInstrumentation command.
-    LaunchedEffect(portInput) {
+    LaunchedEffect(portInput, authCheckSignal) {
         val port = portInput.toIntOrNull()
-        if (port != null && port > 0 && port <= 65535) {
+        isAuthorized = if (port != null && port > 0 && port <= 65535) {
             withContext(Dispatchers.IO) {
                 try {
                     Kadb.create("127.0.0.1", port, 3000, 3000).use { kadb ->
-                        val response = kadb.shell("echo 1")
-                        isAuthorized = (response.exitCode == 0)
+                        kadb.shell("echo 1").exitCode == 0
                     }
                 } catch (e: Exception) {
-                    isAuthorized = false
+                    false
                 }
             }
         } else {
-            isAuthorized = false
-        }
-    }
-
-    LaunchedEffect(signalValue) {
-        slot0Active = try {
-            java.io.File(context.filesDir, "ims_status_0.txt").readText().trim().toBoolean()
-        } catch (e: Exception) {
-            false
-        }
-        slot1Active = try {
-            java.io.File(context.filesDir, "ims_status_1.txt").readText().trim().toBoolean()
-        } catch (e: Exception) {
-            false
-        }
-        slot0Applied = try {
-            java.io.File(context.filesDir, "config_applied_0.txt").readText().trim().toBoolean()
-        } catch (e: Exception) {
-            false
-        }
-        slot1Applied = try {
-            java.io.File(context.filesDir, "config_applied_1.txt").readText().trim().toBoolean()
-        } catch (e: Exception) {
             false
         }
     }
@@ -871,6 +881,7 @@ fun LocalAdbCard(
     DisposableEffect(Unit) {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            // Delivered on mainHandler (see registerNetworkCallback below)
             override fun onAvailable(network: android.net.Network) {
                 val caps = connectivityManager.getNetworkCapabilities(network)
                 isWifiConnected = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
@@ -886,7 +897,7 @@ fun LocalAdbCard(
             .addTransportType(android.net.NetworkCapabilities.TRANSPORT_WIFI)
             .build()
         try {
-            connectivityManager.registerNetworkCallback(request, callback)
+            connectivityManager.registerNetworkCallback(request, callback, mainHandler)
         } catch (e: Exception) {}
         
         val activeNet = connectivityManager.activeNetwork
@@ -930,8 +941,12 @@ fun LocalAdbCard(
 
                         override fun onServiceResolved(resolvedServiceInfo: NsdServiceInfo) {
                             val port = resolvedServiceInfo.port
+                            if (!isOwnDeviceService(resolvedServiceInfo)) {
+                                Log.d("LocalAdb", "Ignoring ADB port $port of another device (${resolvedServiceInfo.host})")
+                                return
+                            }
                             Log.d("LocalAdb", "Resolved local ADB port: $port")
-                            onPortInputChange(port.toString())
+                            mainHandler.post { onPortInputChange(port.toString()) }
                         }
                     })
                 }
@@ -969,9 +984,15 @@ fun LocalAdbCard(
 
                         override fun onServiceResolved(resolvedServiceInfo: NsdServiceInfo) {
                             val port = resolvedServiceInfo.port
+                            if (!isOwnDeviceService(resolvedServiceInfo)) {
+                                Log.d("LocalAdb", "Ignoring ADB pairing port $port of another device (${resolvedServiceInfo.host})")
+                                return
+                            }
                             Log.d("LocalAdb", "Resolved local ADB pairing port: $port")
-                            pairingPortInput = port.toString()
-                            MainActivity.pairingPort = port
+                            mainHandler.post {
+                                pairingPortInput = port.toString()
+                                MainActivity.pairingPort = port
+                            }
                         }
                     })
                 }
@@ -995,6 +1016,7 @@ fun LocalAdbCard(
         }
 
         onDispose {
+            mainHandler.removeCallbacksAndMessages(null)
             try {
                 nsdManager.stopServiceDiscovery(connectListener)
             } catch (e: Exception) {
