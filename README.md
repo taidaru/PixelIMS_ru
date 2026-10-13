@@ -4,11 +4,14 @@
 
 [![Платформа](https://img.shields.io/badge/platform-Android%2010--17-brightgreen)](https://developer.android.com)
 [![API](https://img.shields.io/badge/minSdk-28-blue)](https://developer.android.com/about/versions/10)
-[![Лицензия](https://img.shields.io/badge/license-MIT-orange)](#лицензия)
+[![Лицензия](https://img.shields.io/badge/license-MIT-orange)](#license)
 [![Версия](https://img.shields.io/badge/version-1.0.0--ru-informational)](app/build.gradle)
 [![Проверено](https://img.shields.io/badge/tested-Android%2017-success)](https://developer.android.com)
 
 Это русская версия проекта [svenuks/ImsForPixel](https://github.com/svenuks/ImsForPixel): интерфейс, уведомления и документация переведены на русский язык, сборка настроена под **Google Pixel 9 на Android 17**.
+
+> [!WARNING]
+> Большая часть изменений в этой версии (перевод, настройка сборки и [оптимизация интерфейса](#оптимизация-интерфейса)) внесена с помощью ИИ-ассистента Claude. Код проверялся человеком, но используйте приложение на свой страх и риск.
 
 ---
 
@@ -50,6 +53,19 @@
 - 🚫 **Root** не нужен
 - 🚫 **Shizuku** и другие менеджеры прав не нужны
 - 🚫 **Интернет** не используется — весь трафик ADB идёт только через локальный loopback
+
+---
+
+## Оптимизация интерфейса
+
+По сравнению с оригиналом в этой версии устранены причины подтормаживаний («фризов») интерфейса:
+
+- **Фоновая проверка IMS стала легче.** Каждая проверка запускает на устройстве отдельный процесс `app_process` (новая виртуальная машина Java), поэтому она выполняется раз в 10 секунд вместо 3 и только пока приложение открыто. Путь к APK берётся из самого приложения, а не командой `pm path` при каждой проверке.
+- **Нет ежесекундной перерисовки экрана.** Таймер, который раз в секунду перерисовывал экран и читал 6 файлов статуса в главном потоке, удалён. Файлы статуса читаются в фоновом потоке раз в 2 секунды, а экран обновляется только при изменении статуса.
+- **Настройки сохраняются без блокировки интерфейса.** Переключатели записывают настройки асинхронно (`apply()`). Перед активацией и сбросом запись остаётся синхронной, чтобы настройки гарантированно попали на диск, но выполняется вне главного потока.
+- **Состояние интерфейса меняется только из главного потока.** Системные события сети и поиска портов через mDNS передаются в главный поток.
+- **Игнорируются порты других устройств.** mDNS находит порты беспроводной отладки всех устройств в Wi-Fi сети; теперь используются только порты своего устройства, и порт больше не «прыгает».
+- После сопряжения через уведомление статус «Разрешено» обновляется сразу.
 
 ---
 
@@ -242,9 +258,7 @@ Pull request'ы и issue приветствуются. Перед крупным
 
 ---
 
-## Лицензия
-
-Текст лицензии MIT приведён в оригинале — юридическую силу имеет английская версия.
+## License
 
 ```
 MIT License
@@ -272,12 +286,11 @@ SOFTWARE.
 
 ---
 
-## Благодарности
+## Acknowledgements
 
-Спасибо проектам, чьи идеи сделали *IMS для Pixel* возможным:
+Special thanks to the following projects for the ideas and inspiration that made *IMS for Pixel* possible:
 
-- **[svenuks/ImsForPixel](https://github.com/svenuks/ImsForPixel)** — оригинальный проект, на котором основана эта русская версия.
-- **[Shizuku](https://github.com/RikkaApps/Shizuku)** от RikkaW — за идею «беспроводная отладка как мост к привилегиям». *IMS для Pixel* заимствует эту идею и реализует её полностью самостоятельно.
-- **[LSPosed/HiddenApiBypass](https://github.com/LSPosed/HiddenApiBypass)** — за практичный доступ к закрытым API телефонии в современных Android.
-- **[flyfishxu/Kadb](https://github.com/flyfishxu/Kadb)** — за реализацию ADB по Wi-Fi на чистом Kotlin.
-- Сообществу Android-моддинга — за исследования IMS/carrier config и документирование действительно важных ключей `CarrierConfigManager`.
+- **[Shizuku](https://github.com/RikkaApps/Shizuku)** by RikkaW — for pioneering the "Wireless Debugging as a privilege bridge" pattern. *IMS for Pixel* borrows this core idea and packages it in a fully self-contained way.
+- **[LSPosed/HiddenApiBypass](https://github.com/LSPosed/HiddenApiBypass)** — for making restricted telephony API access practical on modern Android.
+- **[flyfishxu/Kadb](https://github.com/flyfishxu/Kadb)** — for the pure-Kotlin ADB over Wi-Fi implementation.
+- The various IMS/carrier-config research threads in the Android modding community for documenting which `CarrierConfigManager` keys actually matter.
