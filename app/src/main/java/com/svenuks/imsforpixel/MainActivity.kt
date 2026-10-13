@@ -69,7 +69,7 @@ class MainActivity : ComponentActivity() {
     fun showImsStatusNotification(isActivate: Boolean) {
         val channelId = "ims_status_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val ch = NotificationChannel(channelId, "IMS 激活状态", NotificationManager.IMPORTANCE_HIGH)
+            val ch = NotificationChannel(channelId, "Статус активации IMS", NotificationManager.IMPORTANCE_HIGH)
             getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch)
         }
         // Read actual IMS status from files
@@ -77,17 +77,17 @@ class MainActivity : ComponentActivity() {
         val slot1 = try { java.io.File(filesDir, "ims_status_1.txt").readText().trim().toBoolean() } catch (e: Exception) { false }
         val anyRegistered = slot0 || slot1
         val title = if (isActivate) {
-            if (anyRegistered) "✅ VoLTE 激活成功" else "⚠️ VoLTE 激活完成"
+            if (anyRegistered) "✅ VoLTE успешно активирован" else "⚠️ Активация VoLTE завершена"
         } else {
-            "✅ 配置已恢复默认"
+            "✅ Настройки оператора сброшены"
         }
         val body = if (isActivate) {
             buildString {
-                if (slot0) append("SIM 1: IMS 已注册  ") else append("SIM 1: IMS 未注册  ")
-                if (slot1) append("SIM 2: IMS 已注册") else append("SIM 2: IMS 未注册")
+                if (slot0) append("SIM 1: IMS активен  ") else append("SIM 1: IMS не активен  ")
+                if (slot1) append("SIM 2: IMS активен") else append("SIM 2: IMS не активен")
             }
         } else {
-            "运营商覆盖配置已清除，请测试通话功能是否正常"
+            "Переопределения настроек оператора удалены. Проверьте, работают ли звонки"
         }
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -202,7 +202,7 @@ class MainActivity : ComponentActivity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 showPairingNotification()
             } else {
-                Toast.makeText(this, "需要通知权限来在通知栏输入配对码", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Нужно разрешение на уведомления, чтобы ввести код сопряжения из шторки", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -211,10 +211,10 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 "pairing_channel",
-                "无线调试配对",
+                "Сопряжение беспроводной отладки",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "用于在系统设置页下拉通知栏快速输入无线调试配对码"
+                description = "Быстрый ввод кода сопряжения беспроводной отладки из шторки уведомлений, не выходя из настроек"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -224,7 +224,7 @@ class MainActivity : ComponentActivity() {
     private fun showPairingNotification() {
         createNotificationChannel()
         
-        val replyLabel = "请输入6位配对码"
+        val replyLabel = "Введите 6-значный код сопряжения"
         val remoteInput = androidx.core.app.RemoteInput.Builder("extra_pairing_code")
             .setLabel(replyLabel)
             .build()
@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
         
         val action = NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_send,
-            "发送配对码 (Send)",
+            "Отправить код",
             replyPendingIntent
         )
             .addRemoteInput(remoteInput)
@@ -256,8 +256,8 @@ class MainActivity : ComponentActivity() {
             
         val notification = NotificationCompat.Builder(this, "pairing_channel")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("无线调试配对")
-            .setContentText("💡请点击下方的【发送配对码】按钮输入6位数")
+            .setContentTitle("Сопряжение беспроводной отладки")
+            .setContentText("💡 Нажмите «Отправить код» ниже и введите 6 цифр")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
             .setAutoCancel(false)
@@ -272,7 +272,7 @@ class MainActivity : ComponentActivity() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notification = NotificationCompat.Builder(this, "pairing_channel")
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("无线调试配对")
+            .setContentTitle("Сопряжение беспроводной отладки")
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
@@ -283,13 +283,13 @@ class MainActivity : ComponentActivity() {
     private fun handleNotificationPairing(code: String) {
         val port = pairingPort
         if (port == null) {
-            Toast.makeText(this, "未检测到系统配对端口，请确保系统配对弹窗处于打开状态！", Toast.LENGTH_LONG).show()
-            showPairingStatusNotification("配对失败：未检测到系统配对窗口端口")
+            Toast.makeText(this, "Порт сопряжения не найден. Убедитесь, что системное окно сопряжения открыто!", Toast.LENGTH_LONG).show()
+            showPairingStatusNotification("Ошибка сопряжения: не найден порт окна сопряжения")
             return
         }
         
-        Toast.makeText(this, "正在后台配对设备...", Toast.LENGTH_SHORT).show()
-        showPairingStatusNotification("正在配对端口 $port...")
+        Toast.makeText(this, "Выполняется сопряжение в фоне...", Toast.LENGTH_SHORT).show()
+        showPairingStatusNotification("Сопряжение через порт $port...")
 
         val scope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO)
         scope.launch {
@@ -303,13 +303,13 @@ class MainActivity : ComponentActivity() {
             withContext(Dispatchers.Main) {
                 result.fold(
                     onSuccess = {
-                        Toast.makeText(this@MainActivity, "通知配对成功！", Toast.LENGTH_LONG).show()
-                        showPairingStatusNotification("配对成功！请返回应用激活配置。")
+                        Toast.makeText(this@MainActivity, "Сопряжение выполнено!", Toast.LENGTH_LONG).show()
+                        showPairingStatusNotification("Сопряжение выполнено! Вернитесь в приложение и нажмите «Активировать».")
                         onAuthStatusChanged?.invoke()
                     },
                     onFailure = { error ->
-                        Toast.makeText(this@MainActivity, "配对失败: ${error.message}", Toast.LENGTH_LONG).show()
-                        showPairingStatusNotification("配对失败: ${error.message}")
+                        Toast.makeText(this@MainActivity, "Ошибка сопряжения: ${error.message}", Toast.LENGTH_LONG).show()
+                        showPairingStatusNotification("Ошибка сопряжения: ${error.message}")
                     }
                 )
             }
@@ -421,7 +421,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
     fun triggerManualApply() {
         val port = portInput.toIntOrNull()
         if (port == null || port <= 0 || port > 65535) {
-            Toast.makeText(context, "请先开启无线调试服务", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Сначала включите беспроводную отладку", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -460,7 +460,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
                 },
                 onFailure = { error ->
                     isInstrumenting.set(false)
-                    Toast.makeText(context, "激活失败: ${error.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Ошибка активации: ${error.message}", Toast.LENGTH_LONG).show()
                 }
             )
         }
@@ -469,7 +469,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
     fun triggerManualRestore() {
         val port = portInput.toIntOrNull()
         if (port == null || port <= 0 || port > 65535) {
-            Toast.makeText(context, "请先开启无线调试服务", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Сначала включите беспроводную отладку", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -523,7 +523,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
                 },
                 onFailure = { error ->
                     isInstrumenting.set(false)
-                    Toast.makeText(context, "恢复失败: ${error.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Ошибка сброса: ${error.message}", Toast.LENGTH_LONG).show()
                 }
             )
         }
@@ -544,7 +544,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
                 TopAppBar(
                     title = {
                         Text(
-                            "IMS for Pixel",
+                            "IMS для Pixel",
                             fontWeight = FontWeight.Bold,
                             color = TextLight
                         )
@@ -566,7 +566,7 @@ fun MainScreen(recheckSignal: MutableState<Long> = remember { mutableStateOf(Sys
                 // Description Subtitle
                 item {
                     Text(
-                        text = "免 Root 开启 VoLTE/VoNR 通话配置",
+                        text = "Включение VoLTE/VoNR/VoWiFi без root",
                         color = TextMuted,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
@@ -629,12 +629,12 @@ fun SimSelectorTabs(
         Tab(
             selected = selectedSlot == 0,
             onClick = { onSlotSelected(0) },
-            text = { Text("SIM 卡 1", fontWeight = FontWeight.Bold) }
+            text = { Text("SIM 1", fontWeight = FontWeight.Bold) }
         )
         Tab(
             selected = selectedSlot == 1,
             onClick = { onSlotSelected(1) },
-            text = { Text("SIM 卡 2", fontWeight = FontWeight.Bold) }
+            text = { Text("SIM 2", fontWeight = FontWeight.Bold) }
         )
     }
 }
@@ -700,10 +700,12 @@ fun ConfigPanel(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "运营商参数设置 (插槽 ${slotIndex + 1})",
+                    text = "Параметры оператора (слот ${slotIndex + 1})",
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
-                    color = TextLight
+                    color = TextLight,
+                    // Russian title is longer than the original; let it wrap instead of squeezing the badges
+                    modifier = Modifier.weight(1f).padding(end = 8.dp)
                 )
                 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -714,7 +716,7 @@ fun ConfigPanel(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = if (configApplied) "配置:已应用" else "配置:系统默认",
+                            text = if (configApplied) "Конфиг: свой" else "Конфиг: стандарт",
                             color = if (configApplied) AccentGreen else TextMuted,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 10.sp
@@ -728,7 +730,7 @@ fun ConfigPanel(
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     ) {
                         Text(
-                            text = if (imsRegistered) "IMS:已注册" else "IMS:未注册",
+                            text = if (imsRegistered) "IMS: есть" else "IMS: нет",
                             color = if (imsRegistered) AccentGreen else AccentRed,
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 10.sp
@@ -741,27 +743,27 @@ fun ConfigPanel(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Toggles
-            ToggleRow("启用 VoLTE 通话 (VoLTE)", "允许通过 4G/LTE 网络进行语音通话", voLteEnabled) { 
+            ToggleRow("Звонки VoLTE", "Голосовые вызовы через сеть 4G/LTE", voLteEnabled) { 
                 voLteEnabled = it
                 prefs.edit().putBoolean("volte_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
                 onConfigChanged()
             }
-            ToggleRow("启用 5G 通话 (VoNR)", "启用 5G 独立组网语音通话支持 (VoNR)", voNrEnabled) { 
+            ToggleRow("Звонки 5G (VoNR)", "Голосовые вызовы в автономной сети 5G SA (VoNR)", voNrEnabled) { 
                 voNrEnabled = it
                 prefs.edit().putBoolean("vonr_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
                 onConfigChanged()
             }
-            ToggleRow("启用 Wi-Fi 通话 (VoWiFi)", "信号不佳时允许通过 Wi-Fi 进行通话", voWifiEnabled) { 
+            ToggleRow("Звонки по Wi-Fi (VoWiFi)", "Звонки через Wi-Fi при слабом сигнале сотовой сети", voWifiEnabled) { 
                 voWifiEnabled = it
                 prefs.edit().putBoolean("vowifi_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
                 onConfigChanged()
             }
-            ToggleRow("启用 Wi-Fi 通话漫游", "在国际或漫游状态下保持 Wi-Fi 通话启用", wfcRoamingEnabled) { 
+            ToggleRow("Звонки по Wi-Fi в роуминге", "Не отключать звонки по Wi-Fi за границей и в роуминге", wfcRoamingEnabled) { 
                 wfcRoamingEnabled = it
                 prefs.edit().putBoolean("wfc_roaming_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
                 onConfigChanged()
             }
-            ToggleRow("启用补充业务 (UT)", "启用运营商呼叫转移、呼叫等待等补充网络设置", ssUtEnabled) { 
+            ToggleRow("Дополнительные услуги (UT)", "Переадресация, ожидание вызова и другие услуги оператора", ssUtEnabled) { 
                 ssUtEnabled = it
                 prefs.edit().putBoolean("ss_ut_slot_$slotIndex", it).putBoolean("clear_slot_$slotIndex", false).commit()
                 onConfigChanged()
@@ -1019,7 +1021,7 @@ fun LocalAdbCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    "无线调试激活",
+                    "Активация через беспроводную отладку",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
                     color = TextLight
@@ -1034,8 +1036,8 @@ fun LocalAdbCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("第一步：连接 Wi-Fi (必要前提)", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextLight)
-                    Text("启用无线调试需先确保手机已连接到 Wi-Fi 网络", fontSize = 10.sp, color = TextMuted)
+                    Text("Шаг 1: подключитесь к Wi-Fi (обязательно)", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextLight)
+                    Text("Беспроводная отладка работает только при подключении к Wi-Fi", fontSize = 10.sp, color = TextMuted)
                 }
                 Box(
                     modifier = Modifier
@@ -1044,7 +1046,7 @@ fun LocalAdbCard(
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if (isWifiConnected) "已连接" else "未连接",
+                        text = if (isWifiConnected) "Подключено" else "Не подключено",
                         color = if (isWifiConnected) AccentGreen else AccentRed,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp
@@ -1063,9 +1065,9 @@ fun LocalAdbCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("第二步：启用服务并配对", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextLight)
+                    Text("Шаг 2: включите отладку и выполните сопряжение", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextLight)
                     Text(
-                        text = if (isAuthorized) "配对成功，已授权连接" else if (portInput.isNotEmpty()) "服务已开启 (需配对)" else "请在系统设置中开启无线调试",
+                        text = if (isAuthorized) "Сопряжение выполнено, доступ разрешён" else if (portInput.isNotEmpty()) "Отладка включена (нужно сопряжение)" else "Включите беспроводную отладку в настройках",
                         fontSize = 10.sp,
                         color = if (isAuthorized) AccentGreen else if (portInput.isNotEmpty()) AccentOrange else TextMuted
                     )
@@ -1077,7 +1079,7 @@ fun LocalAdbCard(
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = if (isAuthorized) "已授权" else if (portInput.isNotEmpty()) "未配对" else "未连接",
+                        text = if (isAuthorized) "Разрешено" else if (portInput.isNotEmpty()) "Нет сопряжения" else "Не подключено",
                         color = if (isAuthorized) AccentGreen else if (portInput.isNotEmpty()) AccentOrange else TextMuted,
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp
@@ -1094,7 +1096,7 @@ fun LocalAdbCard(
                         try {
                             context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                         } catch (e2: Exception) {
-                            Toast.makeText(context, "未找到开发者选项", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Раздел «Для разработчиков» не найден", Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
@@ -1104,7 +1106,7 @@ fun LocalAdbCard(
             ) {
                 Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("去开启无线调试", fontSize = 11.sp)
+                Text("Открыть настройки беспроводной отладки", fontSize = 11.sp)
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -1112,9 +1114,9 @@ fun LocalAdbCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Step 3: Activation & Status check
-            Text("第三步：一键激活配置", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextLight)
+            Text("Шаг 3: активация в одно касание", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextLight)
             Spacer(modifier = Modifier.height(4.dp))
-            Text("将上方设置的参数应用到当前 SIM 卡中", fontSize = 10.sp, color = TextMuted)
+            Text("Применить выбранные выше параметры к SIM-картам", fontSize = 10.sp, color = TextMuted)
             Spacer(modifier = Modifier.height(8.dp))
 
             Row(
@@ -1130,17 +1132,17 @@ fun LocalAdbCard(
                         .padding(8.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                        Text("SIM 卡 1 通话配置", fontSize = 10.sp, color = TextMuted)
+                        Text("Настройки SIM 1", fontSize = 10.sp, color = TextMuted)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (slot0Applied) "App已优化" else "系统默认",
+                            text = if (slot0Applied) "Применено" else "По умолчанию",
                             color = if (slot0Applied) AccentGreen else TextMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
                         )
                         Spacer(modifier = Modifier.height(1.dp))
                         Text(
-                            text = if (slot0Active) "IMS已注册" else "IMS未注册",
+                            text = if (slot0Active) "IMS активен" else "IMS не активен",
                             color = if (slot0Active) AccentGreen else AccentRed,
                             fontSize = 9.sp
                         )
@@ -1155,17 +1157,17 @@ fun LocalAdbCard(
                         .padding(8.dp)
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                        Text("SIM 卡 2 通话配置", fontSize = 10.sp, color = TextMuted)
+                        Text("Настройки SIM 2", fontSize = 10.sp, color = TextMuted)
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = if (slot1Applied) "App已优化" else "系统默认",
+                            text = if (slot1Applied) "Применено" else "По умолчанию",
                             color = if (slot1Applied) AccentGreen else TextMuted,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
                         )
                         Spacer(modifier = Modifier.height(1.dp))
                         Text(
-                            text = if (slot1Active) "IMS已注册" else "IMS未注册",
+                            text = if (slot1Active) "IMS активен" else "IMS не активен",
                             color = if (slot1Active) AccentGreen else AccentRed,
                             fontSize = 9.sp
                         )
@@ -1190,7 +1192,7 @@ fun LocalAdbCard(
                         Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            if (hasResolvedPort) "一键激活" else "等待开启...",
+                            if (hasResolvedPort) "Активировать" else "Ожидание...",
                             fontSize = 12.sp
                         )
                     }
@@ -1206,7 +1208,7 @@ fun LocalAdbCard(
                     Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        "一键恢复",
+                        "Сбросить",
                         fontSize = 12.sp
                     )
                 }
@@ -1214,7 +1216,7 @@ fun LocalAdbCard(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "💡 激活后 IMS 状态将在数秒内自动更新。",
+                text = "💡 Статус IMS обновится через несколько секунд.",
                 fontSize = 10.sp,
                 color = AccentOrange,
                 modifier = Modifier.padding(horizontal = 2.dp),
@@ -1228,7 +1230,7 @@ fun LocalAdbCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 Text(
-                    text = if (showManualPorts) "隐藏高级设置" else "显示高级设置",
+                    text = if (showManualPorts) "Скрыть дополнительные настройки" else "Дополнительные настройки",
                     color = TextMuted,
                     fontSize = 10.sp,
                     modifier = Modifier
@@ -1243,7 +1245,7 @@ fun LocalAdbCard(
                     value = portInput,
                     onValueChange = { onPortInputChange(it) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("连接端口 (ADB Port)", fontSize = 9.sp) },
+                    label = { Text("Порт подключения (ADB)", fontSize = 9.sp) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     textStyle = LocalTextStyle.current.copy(fontSize = 11.sp)

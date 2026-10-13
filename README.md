@@ -1,64 +1,64 @@
-# IMS for Pixel
+# IMS для Pixel
 
-> Enable VoLTE, VoNR (5G Calling), and Wi-Fi Calling on Google Pixel devices — **no root required**.
+> Включение VoLTE, VoNR (звонки 5G) и звонков по Wi-Fi на смартфонах Google Pixel — **без root**.
 
-[![Platform](https://img.shields.io/badge/platform-Android%2010--17-brightgreen)](https://developer.android.com)
+[![Платформа](https://img.shields.io/badge/platform-Android%2010--17-brightgreen)](https://developer.android.com)
 [![API](https://img.shields.io/badge/minSdk-28-blue)](https://developer.android.com/about/versions/10)
-[![License](https://img.shields.io/badge/license-MIT-orange)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-informational)](app/build.gradle)
-[![Tested](https://img.shields.io/badge/tested-Android%2017-success)](https://developer.android.com)
+[![Лицензия](https://img.shields.io/badge/license-MIT-orange)](#лицензия)
+[![Версия](https://img.shields.io/badge/version-1.0.0--ru-informational)](app/build.gradle)
+[![Проверено](https://img.shields.io/badge/tested-Android%2017-success)](https://developer.android.com)
+
+Это русская версия проекта [svenuks/ImsForPixel](https://github.com/svenuks/ImsForPixel): интерфейс, уведомления и документация переведены на русский язык, сборка настроена под **Google Pixel 9 на Android 17**.
 
 ---
 
-## Overview
+## Обзор
 
-**IMS for Pixel** is a rootless carrier configuration override tool for Google Pixel (and AOSP-compatible) devices. It enables VoLTE, VoNR (5G Calling), and Wi-Fi Calling on carriers that ship incomplete or locked carrier bundles — and works even on **Android 17**, which further restricts privileged telephony APIs for third-party apps.
+**IMS для Pixel** — инструмент для переопределения настроек оператора (carrier config) без root на Google Pixel и других устройствах на AOSP. Он включает VoLTE, VoNR (звонки 5G) и звонки по Wi-Fi у операторов, для которых в прошивке нет готового или полноценного профиля, и работает даже на **Android 17**, где доступ сторонних приложений к привилегированным API телефонии ещё сильнее ограничен.
 
-### Inspired by Shizuku & IMS
+### Вдохновлено Shizuku и IMS
 
-This project draws on the ideas of two great open-source projects:
+Проект опирается на идеи двух отличных open-source проектов:
 
-- **[Shizuku](https://github.com/RikkaApps/Shizuku)** pioneered the pattern of using Android's built-in Wireless Debugging to give user apps a temporary shell permission identity — without root. *IMS for Pixel* takes that same concept and applies it in a fully self-contained way: no Shizuku app needs to be installed. The pairing, connection, and `am instrument` invocation are handled entirely within this app using the [Kadb](https://github.com/flyfishxu/Kadb) library.
+- **[Shizuku](https://github.com/RikkaApps/Shizuku)** первым использовал встроенную в Android беспроводную отладку, чтобы временно выдать пользовательскому приложению права `shell` без root. *IMS для Pixel* применяет ту же идею, но полностью самостоятельно: устанавливать Shizuku не нужно. Сопряжение, подключение и запуск `am instrument` выполняются внутри приложения с помощью библиотеки [Kadb](https://github.com/flyfishxu/Kadb).
 
-- **[IMS Patch / carrier config tools](https://github.com/imsforpixel)** demonstrated which `CarrierConfigManager` keys unlock VoLTE/VoNR/VoWiFi on Pixel hardware. *IMS for Pixel* combines those config keys with the shell-permission approach above to produce a single, simple, self-contained solution.
+- **[IMS Patch / инструменты carrier config](https://github.com/imsforpixel)** показали, какие ключи `CarrierConfigManager` открывают VoLTE/VoNR/VoWiFi на Pixel. *IMS для Pixel* объединяет эти ключи с подходом через права `shell` в одно простое самодостаточное решение.
 
-By merging these two ideas, **IMS for Pixel** is simpler and more convenient than either approach alone:
-
-| | Shizuku-based tools | IMS for Pixel |
+| | Решения на Shizuku | IMS для Pixel |
 |---|---|---|
-| Requires Shizuku app | ✅ Yes | ❌ No |
-| Requires root | ❌ No | ❌ No |
-| Requires PC / ADB cable | ❌ No | ❌ No |
-| Works on Android 15 / 16 / 17 | ⚠️ Varies | ✅ Yes |
-| Self-contained single APK | ❌ No | ✅ Yes |
-| Shows real IMS registration result | ⚠️ Varies | ✅ Yes (notification) |
+| Нужно приложение Shizuku | ✅ Да | ❌ Нет |
+| Нужен root | ❌ Нет | ❌ Нет |
+| Нужен ПК / кабель ADB | ❌ Нет | ❌ Нет |
+| Работает на Android 15 / 16 / 17 | ⚠️ По-разному | ✅ Да |
+| Один самодостаточный APK | ❌ Нет | ✅ Да |
+| Показывает реальный статус регистрации IMS | ⚠️ По-разному | ✅ Да (в уведомлении) |
 
 ---
 
-## Features
+## Возможности
 
-- ✅ **VoLTE** — Enable HD voice calls over LTE
-- ✅ **VoNR** — Enable 5G calling (Voice over New Radio)
-- ✅ **Wi-Fi Calling (VoWiFi)** — Make calls over Wi-Fi
-- ✅ **Wi-Fi Calling Roaming** — Keep Wi-Fi calling active while abroad
-- ✅ **Supplementary Services (UT)** — Call forwarding, call waiting, etc.
-- ✅ **Dual-SIM support** — Independent per-slot configuration
-- ✅ **One-tap restore** — Clear all overrides and return to carrier defaults
-- ✅ **Live IMS status** — Background polling every 3 s
-- ✅ **Notification result** — Real per-slot IMS registration status shown in notification bar after activation
-- ✅ **Tested on Android 10 – 17**
-- 🚫 **No root** required
-- 🚫 **No Shizuku** or any other privilege manager required
-- 🚫 **No internet** — all ADB traffic is local loopback only
+- ✅ **VoLTE** — HD-звонки через LTE
+- ✅ **VoNR** — звонки в сети 5G (Voice over New Radio)
+- ✅ **Звонки по Wi-Fi (VoWiFi)**
+- ✅ **Звонки по Wi-Fi в роуминге** — не отключаются за границей
+- ✅ **Дополнительные услуги (UT)** — переадресация, ожидание вызова и т. п.
+- ✅ **Две SIM-карты** — независимые настройки для каждого слота
+- ✅ **Сброс в одно касание** — удаляет все переопределения и возвращает настройки оператора
+- ✅ **Статус IMS в реальном времени** — фоновая проверка каждые 3 с
+- ✅ **Результат в уведомлении** — реальный статус регистрации IMS по каждому слоту после активации
+- ✅ **Проверено на Android 10–17**
+- 🚫 **Root** не нужен
+- 🚫 **Shizuku** и другие менеджеры прав не нужны
+- 🚫 **Интернет** не используется — весь трафик ADB идёт только через локальный loopback
 
 ---
 
-## How It Works
+## Как это работает
 
 ```
-┌─────────────────────┐      loopback ADB       ┌──────────────────────────┐
-│   IMS for Pixel UI  │ ───────────────────────► │  BrokerInstrumentation   │
-│  (Jetpack Compose)  │   am instrument -w       │  (Instrumentation runner)│
+┌─────────────────────┐      loopback ADB        ┌──────────────────────────┐
+│ Интерфейс IMS для   │ ───────────────────────► │  BrokerInstrumentation   │
+│ Pixel (Compose)     │   am instrument -w       │  (Instrumentation runner)│
 └─────────────────────┘                          └──────────┬───────────────┘
                                                             │ adoptShellPermissionIdentity()
                                                             ▼
@@ -69,171 +69,182 @@ By merging these two ideas, **IMS for Pixel** is simpler and more convenient tha
                                                   TelephonyManager.resetIms()
                                                             │
                                                             ▼
-                                                  Poll IMS registration (≤ 30 s)
+                                                  Ожидание регистрации IMS (≤ 30 с)
                                                             │
                                                             ▼
-                                                  Post result notification
+                                                  Уведомление с результатом
 ```
 
-1. The app self-connects to the device's **Wireless Debugging** port via loopback (`127.0.0.1`).
-2. It launches `BrokerInstrumentation` via `am instrument`, which runs under the `shell` permission identity — the same mechanism Shizuku uses, but self-contained.
-3. `BrokerInstrumentation` calls `CarrierConfigManager.overrideConfig` with your chosen settings, resets IMS, and polls registration for up to 30 seconds.
-4. On completion, a **notification bar** message reports the real per-slot IMS registration result.
-5. A background `ImsQueryTool` process refreshes the in-app IMS status badges every 3 seconds.
+1. Приложение подключается к порту **беспроводной отладки** своего же устройства через loopback (`127.0.0.1`).
+2. Через `am instrument` запускается `BrokerInstrumentation`, который работает с правами `shell` — тот же механизм, что у Shizuku, но встроенный.
+3. `BrokerInstrumentation` вызывает `CarrierConfigManager.overrideConfig` с выбранными настройками, перезапускает IMS и до 30 секунд ждёт регистрации.
+4. По завершении в **шторке уведомлений** появляется реальный результат регистрации IMS по каждому слоту.
+5. Фоновый процесс `ImsQueryTool` каждые 3 секунды обновляет индикаторы статуса IMS в приложении.
 
 ---
 
-## Requirements
+## Требования
 
-| Requirement | Details |
+| Требование | Подробности |
 |---|---|
-| Android version | Android 10 (API 28) or higher |
-| Tested up to | **Android 17** ✅ |
-| Wi-Fi | Must be connected to a Wi-Fi network |
-| Wireless Debugging | Must be enabled in Developer Options |
-| Root / Shizuku | ❌ Not required |
+| Версия Android | Android 9 (API 28) и выше |
+| Проверено до | **Android 17** ✅ |
+| Целевое устройство сборки | **Google Pixel 9** (arm64-v8a) |
+| Wi-Fi | Телефон должен быть подключён к Wi-Fi |
+| Беспроводная отладка | Должна быть включена в разделе «Для разработчиков» |
+| Root / Shizuku | ❌ Не нужны |
 
 ---
 
-## Quick Start
+## Быстрый старт
 
-### 1. Enable Developer Options & Wireless Debugging
+### 1. Включите режим разработчика и беспроводную отладку
 
-1. Go to **Settings → About phone** and tap **Build number** 7 times.
-2. Go to **Settings → System → Developer options**.
-3. Enable **Wireless debugging**.
+1. Откройте **Настройки → О телефоне** и 7 раз нажмите на **Номер сборки**.
+2. Откройте **Настройки → Система → Для разработчиков**.
+3. Включите **Отладку по Wi-Fi** (беспроводную отладку).
 
-### 2. Install the App
+### 2. Установите приложение
 
-Download the latest APK from [Releases](../../releases) and install it, or build from source (see [Building](#building)).
+Скачайте свежий APK (`IMS-for-Pixel-ru-…-pixel9-arm64.apk`) из раздела [Releases](../../releases) и установите его, либо соберите из исходников (см. [Сборка](#сборка)).
 
-### 3. Pair & Activate
+> Если у вас установлен оригинальный *IMS for Pixel* — сначала удалите его: у этой сборки тот же идентификатор пакета (`com.svenuks.imsforpixel`), но другая подпись.
 
-1. Open **IMS for Pixel**.
-2. The app auto-discovers the Wireless Debugging port via mDNS. When the pairing notification appears, enter the **6-digit pairing code** shown in the Wireless Debugging settings.
-3. Configure per-slot toggles as desired (VoLTE, VoNR, VoWiFi, etc.).
-4. Tap **一键激活** (One-tap Activate).
-5. Wait up to ~30 seconds. A system notification confirms success with per-slot IMS registration status.
+### 3. Сопряжение и активация
+
+1. Откройте **IMS для Pixel**.
+2. Нажмите **«Открыть настройки беспроводной отладки»**, затем **«Подключить устройство с помощью кода»**. Приложение само найдёт порт через mDNS. В появившемся уведомлении нажмите **«Отправить код»** и введите **6-значный код сопряжения**.
+3. Настройте переключатели для каждой SIM-карты (VoLTE, VoNR, VoWiFi и т. д.).
+4. Нажмите **«Активировать»**.
+5. Подождите до ~30 секунд. Системное уведомление покажет статус регистрации IMS по каждому слоту.
 
 ---
 
-## Building
+## Сборка
 
-### Prerequisites
+### Готовая сборка через GitHub Actions
 
-- Android Studio (Ladybug or later recommended)
-- JDK 17 (bundled with Android Studio)
+Каждый push запускает workflow [`.github/workflows/build.yml`](.github/workflows/build.yml): он собирает release-APK для Pixel 9 (только `arm64-v8a`) и публикует его в [Releases](../../releases) с тегом `v<версия>`, а также прикладывает к запуску как artifact.
+
+Подпись: если в секретах репозитория заданы `SIGNING_KEYSTORE_BASE64` (keystore в base64), `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS` и `SIGNING_KEY_PASSWORD`, APK подписывается этим ключом. Без них используется debug-ключ сборочной машины — APK устанавливается, но каждая новая сборка подписана другим ключом, и перед обновлением старую версию придётся удалить.
+
+### Требования для локальной сборки
+
+- Android Studio (Ladybug или новее)
+- JDK 17 (входит в Android Studio)
 - Android SDK API 36
 
-### Build Debug
+### Debug-сборка
 
 ```bash
-git clone https://github.com/svenuks/ImsForPixel.git
-cd ImsForPixel
+git clone https://github.com/taidaru/PixelIMS_ru.git
+cd PixelIMS_ru
 ./gradlew assembleDebug
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### Build Release
+### Release-сборка
 
 ```bash
 ./gradlew assembleRelease
 ```
 
-> **macOS note:** If you don't have a system JDK, use Android Studio's bundled JRE:
+> **macOS:** если системного JDK нет, используйте JRE из Android Studio:
 > ```bash
 > JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradlew assembleRelease
 > ```
 
 ---
 
-## Project Structure
+## Структура проекта
 
 ```
 app/src/main/java/com/svenuks/imsforpixel/
-├── MainActivity.kt          # Jetpack Compose UI + mDNS discovery + background IMS polling
-├── BrokerInstrumentation.kt # Shell-identity runner: overrides carrier config, polls IMS, posts notification
-└── ImsQueryTool.kt          # Lightweight app_process entry point for background IMS status queries
+├── MainActivity.kt          # Интерфейс на Jetpack Compose + поиск портов через mDNS + фоновая проверка IMS
+├── BrokerInstrumentation.kt # Запуск с правами shell: переопределяет carrier config, ждёт IMS, показывает уведомление
+└── ImsQueryTool.kt          # Лёгкая точка входа app_process для фоновых запросов статуса IMS
 ```
 
-| File | Role |
+| Файл | Назначение |
 |---|---|
-| `MainActivity.kt` | Full UI (Material 3 / Compose), mDNS service discovery, Kadb ADB client, background IMS refresh |
-| `BrokerInstrumentation.kt` | Privileged patch runner — overrides carrier config, resets IMS, polls registration, posts notification |
-| `ImsQueryTool.kt` | Minimal `app_process` entry point — queries IMS state without UiAutomation overhead |
+| `MainActivity.kt` | Весь интерфейс (Material 3 / Compose), поиск сервисов mDNS, ADB-клиент Kadb, фоновое обновление IMS |
+| `BrokerInstrumentation.kt` | Привилегированный исполнитель — переопределяет carrier config, перезапускает IMS, ждёт регистрации, показывает уведомление |
+| `ImsQueryTool.kt` | Минимальная точка входа `app_process` — запрашивает состояние IMS без накладных расходов UiAutomation |
 
 ---
 
-## Permissions
+## Разрешения
 
-| Permission | Purpose |
+| Разрешение | Зачем |
 |---|---|
-| `INTERNET` | Required by Kadb for local loopback ADB socket |
-| `ACCESS_NETWORK_STATE` | Check Wi-Fi connectivity before ADB pairing |
-| `CHANGE_WIFI_MULTICAST_STATE` | mDNS (NSD) discovery of the Wireless Debugging port |
-| `POST_NOTIFICATIONS` | Show activation result and pairing code in notification bar |
+| `INTERNET` | Нужно Kadb для локального loopback-сокета ADB |
+| `ACCESS_NETWORK_STATE` | Проверка подключения к Wi-Fi перед сопряжением |
+| `CHANGE_WIFI_MULTICAST_STATE` | Поиск порта беспроводной отладки через mDNS (NSD) |
+| `POST_NOTIFICATIONS` | Результат активации и ввод кода сопряжения в шторке уведомлений |
 
-> No data is ever sent to any external server. All network traffic is loopback `127.0.0.1` only.
+> Никакие данные не отправляются на внешние серверы. Весь сетевой трафик идёт только на `127.0.0.1`.
 
 ---
 
-## Dependencies
+## Зависимости
 
-| Library | Version | Purpose |
+| Библиотека | Версия | Назначение |
 |---|---|---|
-| [androidx.core:core-ktx](https://developer.android.com/jetpack/androidx/releases/core) | 1.13.1 | Kotlin extensions |
-| [androidx.activity:activity-compose](https://developer.android.com/jetpack/androidx/releases/activity) | 1.9.1 | Compose activity |
+| [androidx.core:core-ktx](https://developer.android.com/jetpack/androidx/releases/core) | 1.13.1 | Расширения Kotlin |
+| [androidx.activity:activity-compose](https://developer.android.com/jetpack/androidx/releases/activity) | 1.9.1 | Activity для Compose |
 | [androidx.compose BOM](https://developer.android.com/jetpack/compose/bom) | 2024.06.00 | Compose UI, Material 3 |
-| [hiddenapibypass](https://github.com/LSPosed/HiddenApiBypass) | 4.3 | Restricted telephony API access on Android 9+ |
-| [kadb](https://github.com/flyfishxu/Kadb) | 2.1.1 | Pure-Kotlin ADB over Wi-Fi |
-| [adblib](https://github.com/tananaev/adblib) | 1.3 | ADB protocol support |
+| [hiddenapibypass](https://github.com/LSPosed/HiddenApiBypass) | 4.3 | Доступ к закрытым API телефонии на Android 9+ |
+| [kadb](https://github.com/flyfishxu/Kadb) | 2.1.1 | ADB по Wi-Fi на чистом Kotlin |
+| [adblib](https://github.com/tananaev/adblib) | 1.3 | Поддержка протокола ADB |
 
 ---
 
-## FAQ
+## Вопросы и ответы
 
-**Q: Does this survive a reboot?**  
-A: No. `CarrierConfigManager.overrideConfig` overrides are in-memory and reset on reboot. Tap **一键激活** again after each reboot.
+**В: Сохраняются ли настройки после перезагрузки?**
+О: Нет. Переопределения `CarrierConfigManager.overrideConfig` хранятся в памяти и сбрасываются при перезагрузке. После каждой перезагрузки снова нажмите **«Активировать»**.
 
-**Q: Will this break anything?**  
-A: Tap **一键恢复** (One-tap Restore) at any time to clear all overrides and return to carrier defaults.
+**В: Это может что-то сломать?**
+О: В любой момент нажмите **«Сбросить»** — все переопределения удалятся, и вернутся настройки оператора.
 
-**Q: My carrier requires provisioning — will this still work?**  
-A: The app sets `carrier_volte_provisioning_required_bool = false`. This works on most carriers. Carriers with server-side IMS provisioning checks may still fail independently of this app.
+**В: Мой оператор требует провижининг — это сработает?**
+О: Приложение выставляет `carrier_volte_provisioning_required_bool = false`. У большинства операторов этого достаточно. Если оператор проверяет IMS на своей стороне, регистрация может не пройти независимо от приложения.
 
-**Q: Dual SIM support?**  
-A: Yes. Each active SIM slot is configured independently, with its own IMS badge in the UI.
+**В: Поддерживаются две SIM-карты?**
+О: Да. Каждый активный слот настраивается отдельно и имеет свой индикатор IMS.
 
-**Q: Why not just use Shizuku?**  
-A: Shizuku is great, but requires a separate app to be installed and running. *IMS for Pixel* is entirely self-contained — one APK, no dependencies on other apps. It uses the same underlying mechanism (Wireless Debugging + shell permission identity) but handles everything internally.
+**В: Почему не просто Shizuku?**
+О: Shizuku отличный, но требует отдельного запущенного приложения. *IMS для Pixel* полностью самодостаточен — один APK без зависимостей от других приложений. Механизм тот же (беспроводная отладка + права `shell`), но всё делается внутри.
 
-**Q: Is the Wireless Debugging port exposed to the network?**  
-A: No. The ADB connection is made over `127.0.0.1` (loopback) only. Android binds the Wireless Debugging port to `localhost` and it is not accessible from the local network.
-
----
-
-## Security & Auditability
-
-- **No external network requests.** No telemetry, analytics, or data collection of any kind.
-- **Loopback-only ADB.** Every socket connection goes to `127.0.0.1` (the device itself).
-- **Three source files.** The entire app is ~1200 lines of Kotlin across three files — easy to audit end-to-end.
-- **Standard APIs only.** Hidden APIs accessed via the established `HiddenApiBypass` library and Java reflection — no native code or binary blobs.
+**В: Порт беспроводной отладки доступен из сети?**
+О: Приложение подключается только через `127.0.0.1` (loopback) и не обращается к другим устройствам в сети.
 
 ---
 
-## Contributing
+## Безопасность и прозрачность
 
-Pull requests and issues are welcome. Please open an issue before submitting large changes.
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes: `git commit -m 'Add my feature'`
-4. Push: `git push origin feature/my-feature`
-5. Open a Pull Request
+- **Никаких внешних сетевых запросов.** Ни телеметрии, ни аналитики, ни сбора данных.
+- **ADB только через loopback.** Все соединения идут на `127.0.0.1` (само устройство).
+- **Три файла исходников.** Всё приложение — около 1200 строк Kotlin в трёх файлах, его легко проверить целиком.
+- **Только стандартные механизмы.** Закрытые API доступны через известную библиотеку `HiddenApiBypass` и рефлексию Java — без нативного кода и бинарных вставок.
 
 ---
 
-## License
+## Участие в разработке
+
+Pull request'ы и issue приветствуются. Перед крупными изменениями, пожалуйста, откройте issue.
+
+1. Сделайте форк репозитория
+2. Создайте ветку: `git checkout -b feature/my-feature`
+3. Закоммитьте изменения: `git commit -m 'Add my feature'`
+4. Отправьте: `git push origin feature/my-feature`
+5. Откройте Pull Request
+
+---
+
+## Лицензия
+
+Текст лицензии MIT приведён в оригинале — юридическую силу имеет английская версия.
 
 ```
 MIT License
@@ -261,11 +272,12 @@ SOFTWARE.
 
 ---
 
-## Acknowledgements
+## Благодарности
 
-Special thanks to the following projects for the ideas and inspiration that made *IMS for Pixel* possible:
+Спасибо проектам, чьи идеи сделали *IMS для Pixel* возможным:
 
-- **[Shizuku](https://github.com/RikkaApps/Shizuku)** by RikkaW — for pioneering the "Wireless Debugging as a privilege bridge" pattern. *IMS for Pixel* borrows this core idea and packages it in a fully self-contained way.
-- **[LSPosed/HiddenApiBypass](https://github.com/LSPosed/HiddenApiBypass)** — for making restricted telephony API access practical on modern Android.
-- **[flyfishxu/Kadb](https://github.com/flyfishxu/Kadb)** — for the pure-Kotlin ADB over Wi-Fi implementation.
-- The various IMS/carrier-config research threads in the Android modding community for documenting which `CarrierConfigManager` keys actually matter.
+- **[svenuks/ImsForPixel](https://github.com/svenuks/ImsForPixel)** — оригинальный проект, на котором основана эта русская версия.
+- **[Shizuku](https://github.com/RikkaApps/Shizuku)** от RikkaW — за идею «беспроводная отладка как мост к привилегиям». *IMS для Pixel* заимствует эту идею и реализует её полностью самостоятельно.
+- **[LSPosed/HiddenApiBypass](https://github.com/LSPosed/HiddenApiBypass)** — за практичный доступ к закрытым API телефонии в современных Android.
+- **[flyfishxu/Kadb](https://github.com/flyfishxu/Kadb)** — за реализацию ADB по Wi-Fi на чистом Kotlin.
+- Сообществу Android-моддинга — за исследования IMS/carrier config и документирование действительно важных ключей `CarrierConfigManager`.
